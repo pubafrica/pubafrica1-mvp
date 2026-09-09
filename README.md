@@ -1,2 +1,2 @@
-# PubAfrica1 — version mobile simplifiée
-Cette version contient seulement 4 fichiers à envoyer : app.py, requirements.txt, Dockerfile et README.md. Elle comprend l’inscription, la connexion, la recherche, le tableau de bord et la publication d’annonces. Elle est destinée à l’essai et doit être renforcée avant production.
+# PubAfrica — version persistante
+Cette version utilise DATABASE_URL pour PostgreSQL/Supabase. Elle conserve les utilisateurs, les annonces et la modération après redémarrage. Ajouter dans Render : DATABASE_URL et PUBAFRICA_SECRET. Pour un administrateur, créer un compte puis attribuer role=admin dans la table users pendant la phase de test.
