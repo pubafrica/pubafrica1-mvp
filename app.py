@@ -11,12 +11,22 @@ app.secret_key=os.environ.get('PUBAFRICA_SECRET','change-this-secret-before-prod
 DATABASE_URL=os.environ['DATABASE_URL']
 UPLOAD='uploads'; os.makedirs(UPLOAD,exist_ok=True)
 CSS='''<style>body{font:15px Arial;margin:0;background:#eefaff;color:#12364a}header,main,footer{max-width:960px;margin:auto;padding:20px}header{display:flex;justify-content:space-between}.brand{font-weight:bold;font-size:20px;color:#083b58}a{color:#087ea4;text-decoration:none;margin:5px}.btn,button{background:#ff8a3d;color:white;border:0;border-radius:8px;padding:10px 14px;font-weight:bold}input,textarea{display:block;width:100%;padding:11px;margin:6px 0 14px;border:1px solid #cfe5eb;border-radius:8px}textarea{min-height:100px}.hero,.panel,.card{background:white;padding:24px;border-radius:16px;margin:20px 0;box-shadow:0 8px 25px #2d9ab015}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card h3{color:#083b58}.muted{color:#698491}.alert{padding:12px;border-radius:8px;background:#e9fbf3;margin:10px 0}.photos img{max-width:180px;margin:5px;border-radius:10px}@media(max-width:650px){header{display:block}.grid{grid-template-columns:1fr}}</style>'''
-BASE='''<!doctype html><html lang=fr><head><meta name=viewport content="width=device-width,initial-scale=1"><title>PubAfrica</title>'''+CSS+'''</head><body><header><a class=brand href="/">✦ PubAfrica</a><nav><a href="/">Explorer</a>{% if session.get("uid") %}<a href="/dashboard">Mon espace</a><a href="/publish">Publier</a>{% if session.get("role")=="admin" %}<a href="/admin">Administration</a>{% endif %}<a href="/logout">Sortir</a>{% else %}<a href="/login">Connexion</a><a href="/register">Inscription</a>{% endif %}</nav></header><main>{% for m in get_flashed_messages() %}<div class=alert>{{m}}</div>{% endfor %}{% block content %}{% endblock %}</main><footer>PubAfrica · Gratuit pendant la phase d’essai</footer></body></html>'''
+BASE='''<!doctype html><html lang=fr><head><meta name=viewport content="width=device-width,initial-scale=1"><title>PubAfrica</title>'''+CSS+'''</head><body><header><a class=brand href="/">✦ PubAfrica</a><nav><a href="/">Explorer</a>{% if session.get("uid") %}<a href="/dashboard">Mon espace</a><a href="/publish">Publier</a>{% if session.get("role")=="admin" %}<a href="/admin">Administration</a>{% endif %}<a href="/logout">Sortir</a>{% else %}<a href="/login">Connexion</a><a href="/register">Inscription</a>{% endif %}</nav></header><main>{% for m in get_flashed_messages() %}<div class=alert>{{m}}</div>{% endfor %}{% block content %}{% endblock %}</main><footer>PubAfrica · Gratuit pendant la phase d’essai · Appel/WhatsApp : 0196482016 · 0195209533 · pubafrica1@gmail.com</footer></body></html>'''
 def page(body,**ctx): return render_template_string(BASE.replace('{% block content %}{% endblock %}',body),**ctx)
 def conn(): return psycopg2.connect(DATABASE_URL,sslmode='require',cursor_factory=RealDictCursor)
 def init_db():
  c=conn(); cur=c.cursor(); cur.execute('''create table if not exists users(id bigserial primary key,name text not null,email text unique not null,password_hash text not null,role text not null default 'member',created_at timestamptz default now());create table if not exists listings(id bigserial primary key,user_id bigint references users(id) on delete cascade,title text not null,description text not null,category text not null,location text not null,price text,status text not null default 'pending',created_at timestamptz default now());create table if not exists listing_images(id bigserial primary key,listing_id bigint references listings(id) on delete cascade,file_url text not null,created_at timestamptz default now());'''); c.commit(); cur.close(); c.close()
 try: init_db()
+except Exception: pass
+
+def ensure_admin():
+    email=os.environ.get('ADMIN_EMAIL'); password=os.environ.get('ADMIN_PASSWORD')
+    if not email or not password: return
+    c=conn(); cur=c.cursor(); cur.execute('select id from users where email=%s',(email.lower(),))
+    if cur.fetchone(): cur.execute('update users set role=\'admin\' where email=%s',(email.lower(),))
+    else: cur.execute('insert into users(name,email,password_hash,role) values(%s,%s,%s,\'admin\')',('Administrateur',email.lower(),generate_password_hash(password)))
+    c.commit(); c.close()
+try: ensure_admin()
 except Exception: pass
 def auth(f):
  @wraps(f)
