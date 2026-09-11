@@ -1,5 +1,6 @@
 import os
 import uuid
+import base64
 from functools import wraps
 from flask import Flask, request, redirect, session, flash, render_template_string, send_from_directory, abort
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -75,10 +76,10 @@ def publish():
   c=conn();cur=c.cursor();cur.execute('insert into listings(user_id,title,description,category,location,price) values(%s,%s,%s,%s,%s,%s) returning id',(session['uid'],request.form['title'],request.form['description'],request.form['category'],request.form['location'],request.form['price']));lid=cur.fetchone()['id']
   for f in request.files.getlist('images'):
    if f and f.filename and f.filename.lower().rsplit('.',1)[-1] in ('jpg','jpeg','png','webp'):
-    path=f'{lid}/{uuid.uuid4().hex}_{secure_filename(f.filename)}'; data=f.read(); endpoint=f'{SUPABASE_URL}/storage/v1/object/listing-images/{path}'
-    r=requests.post(endpoint,headers={'Authorization':f'Bearer {SUPABASE_SERVICE_KEY}','apikey':SUPABASE_SERVICE_KEY,'Content-Type':f.mimetype},data=data,timeout=30)
-    if r.status_code not in (200,201): raise RuntimeError(f'Storage upload failed: {r.status_code} {r.text[:200]}')
-    url=f'{SUPABASE_URL}/storage/v1/object/public/listing-images/{path}'; cur.execute('insert into listing_images(listing_id,file_url) values(%s,%s)',(lid,url))
+    data=f.read()
+    if len(data)>2_000_000: raise RuntimeError('Photo too large; maximum 2 MB')
+    url=f'data:{f.mimetype};base64,'+base64.b64encode(data).decode('ascii')
+    cur.execute('insert into listing_images(listing_id,file_url) values(%s,%s)',(lid,url))
   c.commit();c.close();flash('Annonce envoyée pour validation.');return redirect('/dashboard')
  return page('''<div class=panel><h1>Publier gratuitement</h1><form method=post><input name=title placeholder="Titre" required><textarea name=description placeholder="Description" required></textarea><input name=category placeholder="Catégorie" required><input name=location placeholder="Pays / ville" required><input name=price placeholder="Prix"><label>Photos<input type=file name=images multiple accept="image/png,image/jpeg,image/webp"></label><button>Envoyer</button></form></div>''')
 @app.route('/admin')
