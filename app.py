@@ -74,14 +74,15 @@ def dashboard():
 def publish():
  if request.method=='POST':
   c=conn();cur=c.cursor();cur.execute('insert into listings(user_id,title,description,category,location,price) values(%s,%s,%s,%s,%s,%s) returning id',(session['uid'],request.form['title'],request.form['description'],request.form['category'],request.form['location'],request.form['price']));lid=cur.fetchone()['id']
+  photo_count=0
   for f in request.files.getlist('images'):
-   if f and f.filename and f.filename.lower().rsplit('.',1)[-1] in ('jpg','jpeg','png','webp'):
+   if f and f.filename and (f.mimetype or '').startswith('image/'):
     data=f.read()
     if len(data)>2_000_000: raise RuntimeError('Photo too large; maximum 2 MB')
     url=f'data:{f.mimetype};base64,'+base64.b64encode(data).decode('ascii')
-    cur.execute('insert into listing_images(listing_id,file_url) values(%s,%s)',(lid,url))
-  c.commit();c.close();flash('Annonce envoyée pour validation.');return redirect('/dashboard')
- return page('''<div class=panel><h1>Publier gratuitement</h1><form method=post enctype="multipart/form-data"><input name=title placeholder="Titre" required><textarea name=description placeholder="Description" required></textarea><input name=category placeholder="Catégorie" required><input name=location placeholder="Pays / ville" required><input name=price placeholder="Prix"><label>Photos<input type=file name=images multiple accept="image/png,image/jpeg,image/webp"></label><button>Envoyer</button></form></div>''')
+    cur.execute('insert into listing_images(listing_id,file_url) values(%s,%s)',(lid,url)); photo_count += 1
+  c.commit();c.close();flash(f'Annonce envoyée pour validation avec {photo_count} photo(s).');return redirect('/dashboard')
+ return page('''<div class=panel><h1>Publier gratuitement</h1><form method=post enctype="multipart/form-data"><input name=title placeholder="Titre" required><textarea name=description placeholder="Description" required></textarea><input name=category placeholder="Catégorie" required><input name=location placeholder="Pays / ville" required><input name=price placeholder="Prix"><label>Photos<input type=file name=images multiple accept="image/*"></label><button>Envoyer</button></form></div>''')
 @app.route('/admin')
 @admin
 def admin_page():
