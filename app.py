@@ -103,7 +103,7 @@ def delete_listing(i):
 
 @app.route('/listing/<int:i>')
 def listing(i):
- c=conn();cur=c.cursor();cur.execute("select l.*,u.name from listings l join users u on u.id=l.user_id where l.id=%s and l.status='published'",(i,));x=cur.fetchone();cur.execute('select * from listing_images where listing_id=%s',(i,));imgs=cur.fetchall();c.close();return page('''<div class=panel>{% if x %}<p class=muted>{{x.category}} · {{x.location}}</p><h1>{{x.title}}</h1><div class=photos>{% for im in imgs %}<img src="{{im.file_url}}" alt="Photo de l’annonce">{% endfor %}</div><p>{{x.description}}</p><h2>{{x.price or 'Prix sur demande'}}</h2><p>Annonceur : {{x.name}}</p>{% else %}<h1>Annonce introuvable</h1>{% endif %}</div>''',x=x,imgs=imgs)
+ c=conn();cur=c.cursor();cur.execute("select l.*,u.name,u.email,u.phone from listings l join users u on u.id=l.user_id where l.id=%s and l.status='published'",(i,));x=cur.fetchone();cur.execute('select * from listing_images where listing_id=%s',(i,));imgs=cur.fetchall();c.close();return page('''<div class=panel>{% if x %}<p class=muted>{{x.category}} · {{x.location}}</p><h1>{{x.title}}</h1><div class=photos>{% for im in imgs %}<img src="{{im.file_url}}" alt="Photo de l’annonce">{% endfor %}</div><p>{{x.description}}</p><h2>{{x.price or 'Prix sur demande'}}</h2><p>Annonceur : {{x.name}}</p>{% else %}<h1>Annonce introuvable</h1>{% endif %}</div>''',x=x,imgs=imgs)
 @app.route('/health')
 def health(): return {'status':'ok','service':'PubAfrica'}
 if __name__=='__main__': app.run(host='0.0.0.0',port=int(os.environ.get('PORT',8000)))
