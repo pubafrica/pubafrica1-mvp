@@ -20,7 +20,7 @@ BASE='''<!doctype html><html lang=fr><head><meta name=viewport content="width=de
 def page(body,**ctx): return render_template_string(BASE.replace('{% block content %}{% endblock %}',body),**ctx)
 def conn(): return psycopg2.connect(DATABASE_URL,sslmode='require',cursor_factory=RealDictCursor)
 def init_db():
- c=conn(); cur=c.cursor(); cur.execute('''create table if not exists users(id bigserial primary key,name text not null,email text unique not null,password_hash text not null,role text not null default 'member',created_at timestamptz default now());create table if not exists listings(id bigserial primary key,user_id bigint references users(id) on delete cascade,title text not null,description text not null,category text not null,location text not null,price text,status text not null default 'pending',created_at timestamptz default now());create table if not exists listing_images(id bigserial primary key,listing_id bigint references listings(id) on delete cascade,file_url text not null,created_at timestamptz default now());'''); c.commit(); cur.close(); c.close()
+ c=conn(); cur=c.cursor(); cur.execute('''create table if not exists users(id bigserial primary key,name text not null,email text unique,password_hash text not null,role text not null default 'member',created_at timestamptz default now());alter table users alter column email drop not null;alter table users add column if not exists phone text unique;create table if not exists listings(id bigserial primary key,user_id bigint references users(id) on delete cascade,title text not null,description text not null,category text not null,location text not null,price text,status text not null default 'pending',created_at timestamptz default now());create table if not exists listing_images(id bigserial primary key,listing_id bigint references listings(id) on delete cascade,file_url text not null,created_at timestamptz default now());'''); c.commit(); cur.close(); c.close()
 try: init_db()
 except Exception: pass
 
@@ -53,16 +53,17 @@ def home():
 def register():
  if request.method=='POST':
   try:
-   c=conn();cur=c.cursor();cur.execute('insert into users(name,email,password_hash) values(%s,%s,%s) returning id',(request.form['name'],request.form['email'].lower(),generate_password_hash(request.form['password']))); uid=cur.fetchone()['id'];c.commit();c.close();session.update(uid=uid,name=request.form['name'],role='member');return redirect('/dashboard')
-  except Exception: flash('Cette adresse e-mail existe déjà ou les données sont invalides.')
- return page('''<div class=panel><h1>Créer un compte</h1><form method=post><input name=name placeholder="Nom complet" required><input name=email type=email placeholder="E-mail" required><input name=password type=password minlength=6 placeholder="Mot de passe" required><button>Créer mon compte</button></form></div>''')
+   contact=request.form['contact'].strip(); email=contact.lower() if '@' in contact else None; phone=None if email else contact
+   c=conn();cur=c.cursor();cur.execute('insert into users(name,email,phone,password_hash) values(%s,%s,%s,%s) returning id',(request.form['name'],email,phone,generate_password_hash(request.form['password']))); uid=cur.fetchone()['id'];c.commit();c.close();session.update(uid=uid,name=request.form['name'],role='member');return redirect('/dashboard')
+  except Exception: flash('Cet e-mail ou ce numéro est déjà utilisé, ou les données sont invalides.')
+ return page('''<div class=panel><h1>Créer un compte</h1><p class=muted>Choisis un e-mail ou un numéro de téléphone.</p><form method=post><input name=name placeholder="Nom complet" required><input name=contact placeholder="E-mail ou numéro de téléphone" required><input name=password type=password minlength=6 placeholder="Mot de passe" required><button>Créer mon compte</button></form></div>''')
 @app.route('/login',methods=['GET','POST'])
 def login():
  if request.method=='POST':
-  c=conn();cur=c.cursor();cur.execute('select * from users where email=%s',(request.form['email'].lower(),));u=cur.fetchone();c.close()
+  contact=request.form['contact'].strip(); c=conn();cur=c.cursor();cur.execute('select * from users where email=%s or phone=%s',(contact.lower(),contact));u=cur.fetchone();c.close()
   if u and check_password_hash(u['password_hash'],request.form['password']): session.update(uid=u['id'],name=u['name'],role=u['role']);return redirect('/admin' if u['role']=='admin' else '/dashboard')
   flash('Identifiants incorrects.')
- return page('''<div class=panel><h1>Connexion</h1><form method=post><input name=email type=email placeholder="E-mail" required><input name=password type=password placeholder="Mot de passe" required><button>Se connecter</button></form></div>''')
+ return page('''<div class=panel><h1>Connexion</h1><form method=post><input name=contact placeholder="E-mail ou numéro de téléphone" required><input name=password type=password placeholder="Mot de passe" required><button>Se connecter</button></form></div>''')
 @app.route('/logout')
 def logout(): session.clear();return redirect('/')
 @app.route('/dashboard')
