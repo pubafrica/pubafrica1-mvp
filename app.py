@@ -81,7 +81,7 @@ def publish():
     url=f'data:{f.mimetype};base64,'+base64.b64encode(data).decode('ascii')
     cur.execute('insert into listing_images(listing_id,file_url) values(%s,%s)',(lid,url))
   c.commit();c.close();flash('Annonce envoyée pour validation.');return redirect('/dashboard')
- return page('''<div class=panel><h1>Publier gratuitement</h1><form method=post><input name=title placeholder="Titre" required><textarea name=description placeholder="Description" required></textarea><input name=category placeholder="Catégorie" required><input name=location placeholder="Pays / ville" required><input name=price placeholder="Prix"><label>Photos<input type=file name=images multiple accept="image/png,image/jpeg,image/webp"></label><button>Envoyer</button></form></div>''')
+ return page('''<div class=panel><h1>Publier gratuitement</h1><form method=post enctype="multipart/form-data"><input name=title placeholder="Titre" required><textarea name=description placeholder="Description" required></textarea><input name=category placeholder="Catégorie" required><input name=location placeholder="Pays / ville" required><input name=price placeholder="Prix"><label>Photos<input type=file name=images multiple accept="image/png,image/jpeg,image/webp"></label><button>Envoyer</button></form></div>''')
 @app.route('/admin')
 @admin
 def admin_page():
