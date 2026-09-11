@@ -5,7 +5,7 @@ from flask import Flask, request, redirect, session, flash, render_template_stri
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import psycopg2
-from supabase import create_client
+import requests
 from psycopg2.extras import RealDictCursor
 
 app=Flask(__name__)
@@ -13,7 +13,6 @@ app.secret_key=os.environ.get('PUBAFRICA_SECRET','change-this-secret-before-prod
 DATABASE_URL=os.environ['DATABASE_URL']
 SUPABASE_URL=os.environ.get('SUPABASE_URL','')
 SUPABASE_SERVICE_KEY=os.environ.get('SUPABASE_SERVICE_KEY','')
-sb=create_client(SUPABASE_URL,SUPABASE_SERVICE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_KEY else None
 UPLOAD='uploads'; os.makedirs(UPLOAD,exist_ok=True)
 CSS='''<style>body{font:15px Arial;margin:0;background:#eefaff;color:#12364a}header,main,footer{max-width:960px;margin:auto;padding:20px}header{display:flex;justify-content:space-between}.brand{font-weight:bold;font-size:20px;color:#083b58}a{color:#087ea4;text-decoration:none;margin:5px}.btn,button{background:#ff8a3d;color:white;border:0;border-radius:8px;padding:10px 14px;font-weight:bold}input,textarea{display:block;width:100%;padding:11px;margin:6px 0 14px;border:1px solid #cfe5eb;border-radius:8px}textarea{min-height:100px}.hero,.panel,.card{background:white;padding:24px;border-radius:16px;margin:20px 0;box-shadow:0 8px 25px #2d9ab015}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card h3{color:#083b58}.muted{color:#698491}.alert{padding:12px;border-radius:8px;background:#e9fbf3;margin:10px 0}.photos img{max-width:180px;margin:5px;border-radius:10px}@media(max-width:650px){header{display:block}.grid{grid-template-columns:1fr}}</style>'''
 BASE='''<!doctype html><html lang=fr><head><meta name=viewport content="width=device-width,initial-scale=1"><title>PubAfrica</title>'''+CSS+'''</head><body><header><a class=brand href="/">✦ PubAfrica</a><nav><a href="/">Explorer</a>{% if session.get("uid") %}<a href="/dashboard">Mon espace</a><a href="/publish">Publier</a>{% if session.get("role")=="admin" %}<a href="/admin">Administration</a>{% endif %}<a href="/logout">Sortir</a>{% else %}<a href="/login">Connexion</a><a href="/register">Inscription</a>{% endif %}</nav></header><main>{% for m in get_flashed_messages() %}<div class=alert>{{m}}</div>{% endfor %}{% block content %}{% endblock %}</main><footer>PubAfrica · Gratuit pendant la phase d’essai · Appel/WhatsApp : 0196482016 · 0195209533 · pubafrica1@gmail.com</footer></body></html>'''
@@ -68,27 +67,37 @@ def logout(): session.clear();return redirect('/')
 @app.route('/dashboard')
 @auth
 def dashboard():
- c=conn();cur=c.cursor();cur.execute('select * from listings where user_id=%s order by id desc',(session['uid'],));items=cur.fetchall();c.close();return page('''<div class=panel><h1>Bonjour {{session.name}}</h1><a class=btn href=/publish>Nouvelle annonce</a><h2>Mes annonces</h2>{% for x in items %}<div class=card><b>{{x.title}}</b><p>Statut : {{x.status}}</p></div>{% else %}<p>Aucune annonce.</p>{% endfor %}</div>''',items=items)
+ c=conn();cur=c.cursor();cur.execute('select * from listings where user_id=%s order by id desc',(session['uid'],));items=cur.fetchall();c.close();return page('''<div class=panel><h1>Bonjour {{session.name}}</h1><a class=btn href=/publish>Nouvelle annonce</a><h2>Mes annonces</h2>{% for x in items %}<div class=card><b>{{x.title}}</b><p>Statut : {{x.status}}</p><form method=post action="/delete-listing/{{x.id}}"><button type=submit>Supprimer</button></form></div>{% else %}<p>Aucune annonce.</p>{% endfor %}</div>''',items=items)
 @app.route('/publish',methods=['GET','POST'])
 @auth
 def publish():
  if request.method=='POST':
   c=conn();cur=c.cursor();cur.execute('insert into listings(user_id,title,description,category,location,price) values(%s,%s,%s,%s,%s,%s) returning id',(session['uid'],request.form['title'],request.form['description'],request.form['category'],request.form['location'],request.form['price']));lid=cur.fetchone()['id']
-  if sb:
-   for f in request.files.getlist('images'):
-    if f and f.filename and f.filename.lower().rsplit('.',1)[-1] in ('jpg','jpeg','png','webp'):
-     path=f'{lid}/{uuid.uuid4().hex}_{secure_filename(f.filename)}'; sb.storage.from_('listing-images').upload(path,f.read(),{'content-type':f.mimetype,'upsert':'true'}); url=sb.storage.from_('listing-images').get_public_url(path); cur.execute('insert into listing_images(listing_id,file_url) values(%s,%s)',(lid,url))
+  for f in request.files.getlist('images'):
+   if f and f.filename and f.filename.lower().rsplit('.',1)[-1] in ('jpg','jpeg','png','webp'):
+    path=f'{lid}/{uuid.uuid4().hex}_{secure_filename(f.filename)}'; data=f.read(); endpoint=f'{SUPABASE_URL}/storage/v1/object/listing-images/{path}'
+    r=requests.post(endpoint,headers={'Authorization':f'Bearer {SUPABASE_SERVICE_KEY}','apikey':SUPABASE_SERVICE_KEY,'Content-Type':f.mimetype},data=data,timeout=30)
+    if r.status_code not in (200,201): raise RuntimeError(f'Storage upload failed: {r.status_code} {r.text[:200]}')
+    url=f'{SUPABASE_URL}/storage/v1/object/public/listing-images/{path}'; cur.execute('insert into listing_images(listing_id,file_url) values(%s,%s)',(lid,url))
   c.commit();c.close();flash('Annonce envoyée pour validation.');return redirect('/dashboard')
  return page('''<div class=panel><h1>Publier gratuitement</h1><form method=post><input name=title placeholder="Titre" required><textarea name=description placeholder="Description" required></textarea><input name=category placeholder="Catégorie" required><input name=location placeholder="Pays / ville" required><input name=price placeholder="Prix"><label>Photos<input type=file name=images multiple accept="image/png,image/jpeg,image/webp"></label><button>Envoyer</button></form></div>''')
 @app.route('/admin')
 @admin
 def admin_page():
- c=conn();cur=c.cursor();cur.execute("select l.*,u.name from listings l join users u on u.id=l.user_id where l.status='pending' order by l.id desc");items=cur.fetchall();c.close();return page('''<div class=panel><p class=muted>Administration PubAfrica</p><h1>Annonces à vérifier</h1>{% for x in items %}<div class=card><h3>{{x.title}}</h3><p>{{x.description}}</p><small>{{x.name}} · {{x.category}} · {{x.location}}</small><form method=post action="/admin/listing/{{x.id}}/published"><button>Valider</button></form><form method=post action="/admin/listing/{{x.id}}/rejected"><button>Refuser</button></form></div>{% else %}<p>Aucune annonce en attente.</p>{% endfor %}</div>''',items=items)
+ c=conn();cur=c.cursor();cur.execute("select l.*,u.name from listings l join users u on u.id=l.user_id where l.status='pending' order by l.id desc");items=cur.fetchall();c.close();return page('''<div class=panel><p class=muted>Administration PubAfrica</p><h1>Annonces à vérifier</h1>{% for x in items %}<div class=card><h3>{{x.title}}</h3><p>{{x.description}}</p><small>{{x.name}} · {{x.category}} · {{x.location}}</small><form method=post action="/admin/listing/{{x.id}}/published"><button>Valider</button></form><form method=post action="/admin/listing/{{x.id}}/rejected"><button>Refuser</button></form><form method=post action="/delete-listing/{{x.id}}"><button>Supprimer</button></form></div>{% else %}<p>Aucune annonce en attente.</p>{% endfor %}</div>''',items=items)
 @app.route('/admin/listing/<int:i>/<status>',methods=['POST'])
 @admin
 def moderate(i,status):
  if status not in ('published','rejected'): abort(400)
  c=conn();cur=c.cursor();cur.execute('update listings set status=%s where id=%s',(status,i));c.commit();c.close();return redirect('/admin')
+@app.route('/delete-listing/<int:i>',methods=['POST'])
+@auth
+def delete_listing(i):
+ c=conn();cur=c.cursor();
+ if session.get('role')=='admin': cur.execute('delete from listings where id=%s',(i,))
+ else: cur.execute('delete from listings where id=%s and user_id=%s',(i,session['uid']))
+ c.commit();c.close();flash('Annonce supprimée.');return redirect('/admin' if session.get('role')=='admin' else '/dashboard')
+
 @app.route('/listing/<int:i>')
 def listing(i):
  c=conn();cur=c.cursor();cur.execute("select l.*,u.name from listings l join users u on u.id=l.user_id where l.id=%s and l.status='published'",(i,));x=cur.fetchone();cur.execute('select * from listing_images where listing_id=%s',(i,));imgs=cur.fetchall();c.close();return page('''<div class=panel>{% if x %}<p class=muted>{{x.category}} · {{x.location}}</p><h1>{{x.title}}</h1><div class=photos>{% for im in imgs %}<img src="{{im.file_url}}" alt="Photo de l’annonce">{% endfor %}</div><p>{{x.description}}</p><h2>{{x.price or 'Prix sur demande'}}</h2><p>Annonceur : {{x.name}}</p>{% else %}<h1>Annonce introuvable</h1>{% endif %}</div>''',x=x,imgs=imgs)
