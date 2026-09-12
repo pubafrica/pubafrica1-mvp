@@ -54,7 +54,7 @@ def home():
   parts=[]
   for t in terms: parts.append("(l.title ilike %s or l.description ilike %s or l.category ilike %s or l.location ilike %s)"); params.extend([f'%{t}%',f'%{t}%',f'%{t}%',f'%{t}%'])
   base+=' and '+' and '.join(parts)
- cur.execute(base+' order by l.id desc',params); items=cur.fetchall(); c.close(); return page('''<section class=hero><p class=muted>Le marché africain en mouvement</p><h1>Trouvez où publier un produit ou un service.</h1><form><input name=q value="{{q}}" placeholder="Rechercher un produit ou service"><button>Rechercher</button></form></section><h2>Annonces</h2><div class=grid>{% for x in items %}<a class=card href="/listing/{{x.id}}"><h3>{{x.title}}</h3><p>{{x.description[:100]}}</p><small>{{x.category}} · {{x.location}}</small><b>{{x.price or 'Prix sur demande'}}</b></a>{% else %}<p>Aucune annonce publiée.</p>{% endfor %}</div>''',items=items,q=q)
+ cur.execute(base+' order by l.id desc',params); items=cur.fetchall(); c.close(); return page('''<section class=hero><p class=muted>Le marché africain en mouvement</p><h1>Trouvez ou publiez un produit ou un service.</h1><form><input name=q value="{{q}}" placeholder="Rechercher un produit ou service"><button>Rechercher</button></form></section><h2>Annonces</h2><div class=grid>{% for x in items %}<a class=card href="/listing/{{x.id}}"><h3>{{x.title}}</h3><p>{{x.description[:100]}}</p><small>{{x.category}} · {{x.location}}</small><b>{{x.price or 'Prix sur demande'}}</b></a>{% else %}<p>Aucune annonce publiée.</p>{% endfor %}</div>''',items=items,q=q)
 @app.route('/register',methods=['GET','POST'])
 def register():
  if request.method=='POST':
