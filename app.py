@@ -59,10 +59,15 @@ def home():
 def register():
  if request.method=='POST':
   try:
-   contact=request.form['contact'].strip(); email=contact.lower() if '@' in contact else None; phone=None if email else contact
+   contact=request.form['contact'].strip(); kind=request.form.get('contact_type','email');
+   if request.form['password'] != request.form['password_confirm']: raise ValueError('password')
+   if kind=='phone':
+    digits=''.join(ch for ch in contact if ch.isdigit()); phone='+'+request.form.get('country_code','229')+digits; email=None
+   else: email=contact.lower(); phone=None
    c=conn();cur=c.cursor();cur.execute('insert into users(name,email,phone,password_hash) values(%s,%s,%s,%s) returning id',(request.form['name'],email,phone,generate_password_hash(request.form['password']))); uid=cur.fetchone()['id'];c.commit();c.close();session.update(uid=uid,name=request.form['name'],role='member');return redirect('/dashboard')
+  except ValueError: flash('Les deux mots de passe ne correspondent pas.')
   except Exception: flash('Cet e-mail ou ce numéro est déjà utilisé, ou les données sont invalides.')
- return page('''<div class=panel><h1>Créer un compte</h1><p class=muted>Choisis un e-mail ou un numéro de téléphone.</p><form method=post><input name=name placeholder="Nom complet" required><input name=contact placeholder="E-mail ou numéro de téléphone" required><input name=password type=password minlength=6 placeholder="Mot de passe" required><button>Créer mon compte</button></form></div>''')
+ return page('''<div class=panel><h1>Créer un compte</h1><p class=muted>Choisis ton mode d’inscription.</p><form method=post><input name=name placeholder="Nom complet" required><select name=contact_type onchange="document.getElementById('phonebox').style.display=this.value==='phone'?'flex':'none';document.getElementById('contact').type=this.value==='phone'?'tel':'email';document.getElementById('contact').placeholder=this.value==='phone'?'Numéro de téléphone':'Adresse e-mail'" required><option value=email>E-mail</option><option value=phone>Numéro de téléphone</option></select><div id=phonebox style="display:none;gap:6px"><select name=country_code><option value=229 selected>🇧🇯 +229 Bénin</option><option value=228>🇹🇬 +228 Togo</option><option value=225>🇨🇮 +225 Côte d’Ivoire</option><option value=226>🇧🇫 +226 Burkina Faso</option><option value=227>🇳🇪 +227 Niger</option><option value=221>🇸🇳 +221 Sénégal</option><option value=223>🇲🇱 +223 Mali</option><option value=234>🇳🇬 +234 Nigeria</option><option value=233>🇬🇭 +233 Ghana</option><option value=237>🇨🇲 +237 Cameroun</option><option value=241>🇬🇦 +241 Gabon</option><option value=243>🇨🇩 +243 RDC</option></select></div><input id=contact name=contact type=email placeholder="Adresse e-mail" required><input name=password type=password minlength=6 placeholder="Mot de passe" required><input name=password_confirm type=password minlength=6 placeholder="Confirmer le mot de passe" required><button>Créer mon compte</button></form></div>''')
 @app.route('/login',methods=['GET','POST'])
 def login():
  if request.method=='POST':
