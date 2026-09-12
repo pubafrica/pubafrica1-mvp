@@ -102,7 +102,15 @@ def publish():
 @app.route('/admin')
 @admin
 def admin_page():
- c=conn();cur=c.cursor();cur.execute("select l.*,u.name from listings l join users u on u.id=l.user_id where l.status='pending' order by l.id desc");items=cur.fetchall();c.close();return page('''<div class=panel><p class=muted>Administration PubAfrica</p><h1>Annonces à vérifier</h1>{% for x in items %}<div class=card><h3>{{x.title}}</h3><p>{{x.description}}</p><small>{{x.name}} · {{x.category}} · {{x.location}}</small><form method=post action="/admin/listing/{{x.id}}/published"><button>Valider</button></form><form method=post action="/admin/listing/{{x.id}}/rejected"><button>Refuser</button></form><form method=post action="/delete-listing/{{x.id}}"><button>Supprimer</button></form></div>{% else %}<p>Aucune annonce en attente.</p>{% endfor %}</div>''',items=items)
+ c=conn();cur=c.cursor();
+ cur.execute("select l.*,u.name from listings l join users u on u.id=l.user_id where l.status='pending' order by l.id desc");items=cur.fetchall()
+ cur.execute("select u.id,u.name,u.email,u.phone,u.role,u.created_at,count(l.id) as listing_count from users u left join listings l on l.user_id=u.id group by u.id order by u.id desc");users=cur.fetchall()
+ cur.execute("select i.*,l.title from inquiries i join listings l on l.id=i.listing_id order by i.id desc");inquiries=cur.fetchall()
+ cur.execute("select count(*) as n from listings where status='published'");published=cur.fetchone()['n']
+ cur.execute("select count(*) as n from listings where status='pending'");pending=cur.fetchone()['n']
+ cur.execute("select count(*) as n from listings where status='rejected'");rejected=cur.fetchone()['n']
+ cur.execute("select count(*) as n from users");user_count=cur.fetchone()['n']; c.close()
+ return page('''<div class=panel><p class=muted>Administration PubAfrica</p><h1>Tableau de bord</h1><div class=grid><div class=card><h3>{{user_count}}</h3><p>Utilisateurs</p></div><div class=card><h3>{{published}}</h3><p>Annonces publiées</p></div><div class=card><h3>{{pending}}</h3><p>En attente</p></div></div><h2>Annonces à vérifier</h2>{% for x in items %}<div class=card><h3>{{x.title}}</h3><p>{{x.description}}</p><small>{{x.name}} · {{x.category}} · {{x.location}}</small><form method=post action="/admin/listing/{{x.id}}/published"><button>Valider</button></form><form method=post action="/admin/listing/{{x.id}}/rejected"><button>Refuser</button></form><form method=post action="/delete-listing/{{x.id}}"><button>Supprimer</button></form></div>{% else %}<p>Aucune annonce en attente.</p>{% endfor %}<h2>Utilisateurs</h2>{% for u in users %}<div class=card><b>{{u.name}}</b><p>{{u.email or u.phone or 'Coordonnée non renseignée'}} · {{u.listing_count}} annonce(s) · {{u.role}}</p></div>{% endfor %}<h2>Messages reçus</h2>{% for m in inquiries %}<div class=card><b>{{m.title}}</b><p><strong>{{m.sender_name}}</strong> — {{m.sender_contact}}</p><p>{{m.message}}</p></div>{% else %}<p>Aucun message reçu.</p>{% endfor %}</div>''',items=items,users=users,inquiries=inquiries,published=published,pending=pending,rejected=rejected,user_count=user_count)
 @app.route('/admin/listing/<int:i>/<status>',methods=['POST'])
 @admin
 def moderate(i,status):
