@@ -2,7 +2,7 @@ import os
 import uuid
 import base64
 from functools import wraps
-from flask import Flask, request, redirect, session, flash, render_template_string, send_from_directory, abort
+from flask import Flask, request, redirect, session, flash, render_template_string, send_from_directory, send_file, abort, jsonify, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import psycopg2
@@ -16,7 +16,7 @@ SUPABASE_URL=os.environ.get('SUPABASE_URL','')
 SUPABASE_SERVICE_KEY=os.environ.get('SUPABASE_SERVICE_KEY','')
 UPLOAD='uploads'; os.makedirs(UPLOAD,exist_ok=True)
 CSS='''<style>body{font:15px Arial;margin:0;background:#eefaff;color:#12364a}header,main,footer{max-width:960px;margin:auto;padding:20px}header{display:flex;justify-content:space-between}.brand{font-weight:bold;font-size:20px;color:#083b58}a{color:#087ea4;text-decoration:none;margin:5px}.btn,button{background:#ff8a3d;color:white;border:0;border-radius:8px;padding:10px 14px;font-weight:bold}input,textarea{display:block;width:100%;padding:11px;margin:6px 0 14px;border:1px solid #cfe5eb;border-radius:8px}textarea{min-height:100px}.hero,.panel,.card{background:white;padding:24px;border-radius:16px;margin:20px 0;box-shadow:0 8px 25px #2d9ab015}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card h3{color:#083b58}.muted{color:#698491}.alert{padding:12px;border-radius:8px;background:#e9fbf3;margin:10px 0}.photos img{max-width:180px;margin:5px;border-radius:10px}@media(max-width:650px){header{display:block}.grid{grid-template-columns:1fr}}</style>'''
-BASE='''<!doctype html><html lang=fr><head><meta name=viewport content="width=device-width,initial-scale=1"><title>PubAfrica – Produits, services et annonces en Afrique</title><meta name=description content="PubAfrica est une plateforme africaine gratuite pour rechercher et publier des produits, services et annonces."><meta name=robots content="index,follow"><meta name="google-site-verification" content="MdcV4td63-WQhHnqNcflIUXk8OchdQXLI7xPYw5UOdI"><meta property=og:title content="PubAfrica – Le marché africain en mouvement"><meta property=og:description content="Trouvez, publiez et développez gratuitement en Afrique.">'''+CSS+'''</head><body><header><a class=brand href="/">✦ PubAfrica</a><nav><a href="/">Explorer</a>{% if session.get("uid") %}<a href="/dashboard">Mon espace</a><a href="/publish">Publier</a>{% if session.get("role")=="admin" %}<a href="/admin">Administration</a>{% endif %}<a href="/logout">Sortir</a>{% else %}<a href="/login">Connexion</a><a href="/register">Inscription</a>{% endif %}</nav></header><main>{% for m in get_flashed_messages() %}<div class=alert>{{m}}</div>{% endfor %}{% block content %}{% endblock %}</main><footer>PubAfrica · Gratuit pendant la phase d’essai · Appel/WhatsApp : 0196482016 · 0195209533 · pubafrica1@gmail.com</footer></body></html>'''
+BASE='''<!doctype html><html lang=fr><head><meta name=viewport content="width=device-width,initial-scale=1"><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#083b58"><title>PubAfrica – Produits, services et annonces en Afrique</title><meta name=description content="PubAfrica est une plateforme africaine gratuite pour rechercher et publier des produits, services et annonces."><meta name=robots content="index,follow"><meta name="google-site-verification" content="MdcV4td63-WQhHnqNcflIUXk8OchdQXLI7xPYw5UOdI"><meta property=og:title content="PubAfrica – Le marché africain en mouvement"><meta property=og:description content="Trouvez, publiez et développez gratuitement en Afrique.">'''+CSS+'''</head><body><header><a class=brand href="/">✦ PubAfrica</a><nav><a href="/">Explorer</a>{% if session.get("uid") %}<a href="/dashboard">Mon espace</a><a href="/publish">Publier</a>{% if session.get("role")=="admin" %}<a href="/admin">Administration</a>{% endif %}<a href="/logout">Sortir</a>{% else %}<a href="/login">Connexion</a><a href="/register">Inscription</a>{% endif %}</nav></header><main>{% for m in get_flashed_messages() %}<div class=alert>{{m}}</div>{% endfor %}{% block content %}{% endblock %}</main><footer>PubAfrica · Gratuit pendant la phase d’essai · Appel/WhatsApp : 0196482016 · 0195209533 · pubafrica1@gmail.com</footer><script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js")}</script></body></html>'''
 def page(body,**ctx): return render_template_string(BASE.replace('{% block content %}{% endblock %}',body),**ctx)
 def conn(): return psycopg2.connect(DATABASE_URL,sslmode='require',cursor_factory=RealDictCursor)
 def init_db():
@@ -110,6 +110,17 @@ def contact(i):
 @app.route('/listing/<int:i>')
 def listing(i):
  c=conn();cur=c.cursor();cur.execute("select l.*,u.name,u.email,u.phone from listings l join users u on u.id=l.user_id where l.id=%s and l.status='published'",(i,));x=cur.fetchone();cur.execute('select * from listing_images where listing_id=%s',(i,));imgs=cur.fetchall();c.close();return page('''<div class=panel>{% if x %}<p class=muted>{{x.category}} · {{x.location}}</p><h1>{{x.title}}</h1><div class=photos>{% for im in imgs %}<img src="{{im.file_url}}" alt="Photo de l’annonce">{% endfor %}</div><p>{{x.description}}</p><h2>{{x.price or 'Prix sur demande'}}</h2><p>Annonceur : {{x.name}}</p><div class=contact><h2>Contacter l’annonceur</h2><a class=btn href="/contact/{{x.id}}">Écrire un message</a>{% if x.phone %}<a class=btn href="tel:{{x.phone}}">Appeler</a><a class=btn href="https://wa.me/{{x.phone}}">WhatsApp</a>{% endif %}{% if x.email %}<a class=btn href="mailto:{{x.email}}?subject=Demande%20d%27informations%20sur%20{{x.title}}">E-mail</a>{% endif %}</div>{% else %}<h1>Annonce introuvable</h1>{% endif %}</div>''',x=x,imgs=imgs)
+@app.route('/manifest.json')
+def manifest():
+ return jsonify({'name':'PubAfrica','short_name':'PubAfrica','start_url':'/','display':'standalone','background_color':'#eefaff','theme_color':'#083b58','description':'Marketplace africaine gratuite de produits, services et annonces.','icons':[{'src':'/icon.png','sizes':'192x192','type':'image/png'},{'src':'/icon.png','sizes':'512x512','type':'image/png'}]})
+
+@app.route('/icon.png')
+def icon(): return Response('''<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="80" fill="#083b58"/><text x="256" y="300" text-anchor="middle" font-family="Arial" font-size="150" font-weight="bold" fill="#ff8a3d">PA</text></svg>''',mimetype='image/svg+xml')
+
+@app.route('/sw.js')
+def sw():
+ return "self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());",200,{'Content-Type':'application/javascript'}
+
 @app.route('/robots.txt')
 def robots():
  return 'User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /dashboard\nDisallow: /publish\nDisallow: /contact\nSitemap: '+request.url_root.rstrip('/')+'/sitemap.xml\n',200,{'Content-Type':'text/plain; charset=utf-8'}
