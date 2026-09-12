@@ -74,7 +74,11 @@ def login():
   contact=request.form['contact'].strip(); c=conn();cur=c.cursor();cur.execute('select * from users where email=%s or phone=%s',(contact.lower(),contact));u=cur.fetchone();c.close()
   if u and check_password_hash(u['password_hash'],request.form['password']): session.update(uid=u['id'],name=u['name'],role=u['role']);return redirect('/admin' if u['role']=='admin' else '/dashboard')
   flash('Identifiants incorrects.')
- return page('''<div class=panel><h1>Connexion</h1><form method=post><input name=contact placeholder="E-mail ou numéro de téléphone" required><input name=password type=password placeholder="Mot de passe" required><button>Se connecter</button></form></div>''')
+ return page('''<div class=panel><h1>Connexion</h1><form method=post><input name=contact placeholder="E-mail ou numéro de téléphone" required><input name=password type=password placeholder="Mot de passe" required><button>Se connecter</button></form><p><a href="/forgot-password">Mot de passe oublié ?</a></p></div>''')
+@app.route('/forgot-password',methods=['GET','POST'])
+def forgot_password():
+ if request.method=='POST': flash('La demande sera traitée par e-mail dès que la confirmation e-mail sera activée.')
+ return page('''<div class=panel><h1>Mot de passe oublié</h1><p class=muted>Entre l’adresse e-mail de ton compte. Un lien sécurisé sera envoyé lorsque la confirmation e-mail sera activée.</p><form method=post><input name=contact type=email placeholder="Adresse e-mail" required><button>Demander un lien</button></form><p><a href="/login">Retour à la connexion</a></p></div>''')
 @app.route('/logout')
 def logout(): session.clear();return redirect('/')
 @app.route('/dashboard')
