@@ -84,7 +84,7 @@ def logout(): session.clear();return redirect('/')
 @app.route('/dashboard')
 @auth
 def dashboard():
- c=conn();cur=c.cursor();cur.execute('select * from listings where user_id=%s order by id desc',(session['uid'],));items=cur.fetchall();c.close();return page('''<div class=panel><h1>Bonjour {{session.name}}</h1><a class=btn href=/publish>Nouvelle annonce</a><h2>Mes annonces</h2>{% for x in items %}<div class=card><b>{{x.title}}</b><p>Statut : {{x.status}}</p><form method=post action="/delete-listing/{{x.id}}"><button type=submit>Supprimer</button></form></div>{% else %}<p>Aucune annonce.</p>{% endfor %}</div>''',items=items)
+ c=conn();cur=c.cursor();cur.execute('select * from listings where user_id=%s order by id desc',(session['uid'],));items=cur.fetchall();cur.execute('select i.*,l.title from inquiries i join listings l on l.id=i.listing_id where l.user_id=%s order by i.id desc',(session['uid'],));messages=cur.fetchall();c.close();return page('''<div class=panel><h1>Bonjour {{session.name}}</h1><a class=btn href=/publish>Nouvelle annonce</a><h2>Mes annonces</h2>{% for x in items %}<div class=card><b>{{x.title}}</b><p>Statut : {{x.status}}</p><form method=post action="/delete-listing/{{x.id}}"><button type=submit>Supprimer</button></form></div>{% else %}<p>Aucune annonce.</p>{% endfor %}<h2>Messages reçus</h2>{% for m in messages %}<div class=card><b>{{m.title}}</b><p><strong>{{m.sender_name}}</strong> · {{m.sender_contact}}</p><p>{{m.message}}</p></div>{% else %}<p>Aucun message reçu.</p>{% endfor %}</div>''',items=items,messages=messages)
 @app.route('/publish',methods=['GET','POST'])
 @auth
 def publish():
